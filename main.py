@@ -30,21 +30,27 @@ def load_data(filename):
     return sentences, targets
 
 
-def sgdUpdate(target, dvalue, learn_rate = 0.01, L2Reg=0.0001):
+def sgdUpdate(target, dvalue, learn_rate = 0.01, L2Reg = 0.0001):
     target -= learn_rate*(dvalue + target*L2Reg)
+
+
+def adagradUpdate(target, history, dvalue, learn_rate = 0.01, L2Reg = 0.0001):
+    dx = dvalue + target * L2Reg
+    history += dx **2
+    target -= learn_rate * dx / (numpy.sqrt(history) + 1e-7)
 
 
 def train_forward(m, sentence, target):
     window_c, window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c = m.forward(sentence)
     dEmbed_c, dlin1W, dlin1B, dlin2W, dlin2b, drnnW, drnnU, drnnB, dlin3W, dlin3b= m.backward(window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c, target)
-    sgdUpdate(m.L1.W, dlin1W)
+    adagradUpdate(m.L1.W, m.L1.Wh, dlin1W)
     sgdUpdate(m.L1.b, dlin1B)
-    sgdUpdate(m.L2.W, dlin2W)
+    adagradUpdate(m.L2.W, m.L2.Wh, dlin2W)
     sgdUpdate(m.L2.b, dlin2b)
-    sgdUpdate(m.L3.W, dlin3W)
+    adagradUpdate(m.L3.W, m.L3.Wh, dlin3W)
     sgdUpdate(m.L3.b, dlin3b)
-    sgdUpdate(m.rnn.W, drnnW)
-    sgdUpdate(m.rnn.U, drnnU)
+    adagradUpdate(m.rnn.W, m.rnn.Wh, drnnW)
+    adagradUpdate(m.rnn.U, m.rnn.Uh, drnnU)
     sgdUpdate(m.rnn.b, drnnB)
 
     assert len(dEmbed_c) == len(window_c)
@@ -76,6 +82,7 @@ def init_targets_id(m, targets):
 
 
 def train_model():
+    numpy.seterr(invalid="raise")
     m = Model()
     sentences, targets = load_data("predict_test_train.utf8")
     init_lookup_table(m,sentences)

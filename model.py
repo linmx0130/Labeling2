@@ -6,9 +6,12 @@ class RNN(object):
         self.in_size = in_size
         self.out_size = out_size
         self.activation = numpy.tanh
-        self.W = numpy.random.uniform(-numpy.sqrt(6/(in_size+out_size)), numpy.sqrt(6/(in_size+out_size)), size=(out_size, in_size))
-        self.U = numpy.random.uniform(-numpy.sqrt(3/out_size), numpy.sqrt(3 / out_size),size=(out_size, out_size))
+        self.W = numpy.random.uniform(-numpy.sqrt(3./(in_size+out_size)), numpy.sqrt(3./(in_size+out_size)), size=(out_size, in_size))
+        self.U = numpy.random.uniform(-numpy.sqrt(1.5/out_size), numpy.sqrt(1.5/ out_size),size=(out_size, out_size))
         self.b = numpy.zeros((out_size,), dtype=numpy.float64)
+        self.Wh = numpy.zeros_like(self.W)
+        self.Uh = numpy.zeros_like(self.U)
+        self.bh = numpy.zeros_like(self.b)
 
     def step(self, input, last_hidden):
         v = numpy.dot(self.W, input) + self.b + numpy.dot(self.U, last_hidden)
@@ -18,8 +21,7 @@ class RNN(object):
         return derivInput, derivHidden, derivW, derivU, derivB
     '''
     def back_step(self, input, last_hidden, hidden, dhidden_from_next, errors):
-        dv = (errors + dhidden_from_next) * (numpy.ones(self.out_size) - hidden * hidden)
-        #dv = errors * (numpy.ones(self.out_size) - hidden * hidden)
+        dv = (errors +dhidden_from_next) * (numpy.ones(self.out_size) - hidden * hidden)
         di = numpy.dot(dv, self.W)
         dh = numpy.dot(dv, self.U)
         dW = numpy.outer(dv, input)
@@ -31,9 +33,11 @@ class Linear(object):
     def __init__(self, in_size, out_size):
         self.in_size = in_size
         self.out_size = out_size
-        self.W = numpy.random.uniform(-numpy.sqrt(6 / (in_size + out_size)), numpy.sqrt(6 / (in_size + out_size)),
+        self.W = numpy.random.uniform(-numpy.sqrt(6. / (in_size + out_size)), numpy.sqrt(6. / (in_size + out_size)),
                                  size=(out_size,in_size))
         self.b = numpy.zeros((out_size,), dtype=numpy.float64)
+        self.Wh = numpy.zeros_like(self.W)
+        self.bh = numpy.zeros_like(self.b)
 
     def step(self, input):
         v = numpy.dot(self.W, input)
@@ -64,7 +68,7 @@ class LookupTable(object):
 
     def add_token(self, token, embed=None):
         if embed is None:
-            embed = numpy.random.uniform(size=self.embed_size)
+            embed = numpy.random.uniform(-0.1, 0.1, size=self.embed_size)
         self.table[token]=embed
 
     def has_token(self, token):
@@ -77,7 +81,7 @@ class LookupTable(object):
 class Softmax(object):
     def softmax(self, x):
         xmin = numpy.min(x)
-        x-=xmin
+        x -= xmin
         y = numpy.exp(-x)
         return y / y.sum()
 
@@ -120,20 +124,19 @@ class Model(object):
             non1_c.append(non1)
         lin2_c = [self.L2.step(v) for v in non1_c]
         rnn_c = []
-        # for i in range(len(lin2_c)):
-        #     if i == 0:
-        #         last_hidden = numpy.zeros(self.rnn.out_size)
-        #     else:
-        #         last_hidden = rnn_c[i-1]
-        #     rnn_out = self.rnn.step(lin2_c[i], last_hidden)
-        #     rnn_c.append(rnn_out)
+        for i in range(len(lin2_c)):
+            if i == 0:
+                last_hidden = numpy.zeros(self.rnn.out_size)
+            else:
+                last_hidden = rnn_c[i-1]
+            rnn_out = self.rnn.step(lin2_c[i], last_hidden)
+            rnn_c.append(rnn_out)
 
-        lin3_c = [self.L3.step(v) for v in lin2_c]
-        softmax_c = [self.softmax.step(v) for v in lin2_c]
-
+        lin3_c = [self.L3.step(v) for v in rnn_c]
+        softmax_c = [self.softmax.step(v) for v in lin3_c]
         return (window_c, window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c)
 
-    def backward(self, window_vecots_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c, targets):
+    def backward(self, window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c, targets):
         assert len(softmax_c) == len(targets)
         derrors = [self.softmax.get_gradients(softmax_c[i], self.target_map[targets[i]]) for i in range(len(targets))]
         dlin3W_s = numpy.zeros_like(self.L3.W)
@@ -148,24 +151,25 @@ class Model(object):
         drnnW_s = numpy.zeros_like(self.rnn.W)
         drnnU_s = numpy.zeros_like(self.rnn.U)
         drnnB_s = numpy.zeros_like(self.rnn.b)
-        #dhidden_from_next = numpy.zeros(self.rnn.out_size)
-        # for i in range(len(drnn_c) - 1, -1, -1):
-        #     if i == 0:
-        #         last_hidden = numpy.zeros(self.rnn.out_size)
-        #     else:
-        #         last_hidden = rnn_c[i - 1]
-        #     di, dh, dW, dU, dB = self.rnn.back_step(lin2_c[i], last_hidden, rnn_c[i], dhidden_from_next, drnn_c[i])
-        #     dlin2_c.insert(0, di)
-        #     dhidden_from_next = dh
-        #     drnnW_s += dW
-        #     drnnU_s += dU
-        #     drnnB_s += dB
+        dhidden_from_next = numpy.zeros(self.rnn.out_size)
+        dlin2_c = []
+        for i in range(len(drnn_c) - 1, -1, -1):
+            if i == 0:
+                last_hidden = numpy.zeros(self.rnn.out_size)
+            else:
+                last_hidden = rnn_c[i - 1]
+            di, dh, dW, dU, dB = self.rnn.back_step(lin2_c[i], last_hidden, rnn_c[i], dhidden_from_next, drnn_c[i])
+            dlin2_c.insert(0, di)
+            dhidden_from_next = dh
+            drnnW_s += dW
+            drnnU_s += dU
+            drnnB_s += dB
 
         dnon1_c = []
         dlin2W_s = numpy.zeros_like(self.L2.W)
         dlin2b_s = numpy.zeros_like(self.L2.b)
         for i in range(len(derrors)):
-            dnon_1, dlin2W, dlin2b = self.L2.back_step(non1_c[i], derrors[i])
+            dnon_1, dlin2W, dlin2b = self.L2.back_step(non1_c[i], dlin2_c[i])
             dnon1_c.append(dnon_1)
             dlin2W_s += dlin2W
             dlin2b_s += dlin2b
@@ -178,7 +182,7 @@ class Model(object):
         dlin1B_s = numpy.zeros_like(self.L1.b)
         dEmbed_c = []
         for i in range(len(dlin1_c)):
-            di, dW, dB = self.L1.back_step(window_vecots_c[i], dlin1_c[i])
+            di, dW, dB = self.L1.back_step(window_vectors_c[i], dlin1_c[i])
             dEmbed_c.append(di)
             dlin1W_s += dW
             dlin1B_s += dB
