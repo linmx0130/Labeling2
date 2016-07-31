@@ -102,9 +102,9 @@ class Model(object):
         self.lookup = LookupTable(50)
         self.L1 = Linear(250, 300)
         self.N1 = Nonlinear(300)
-        self.L2 = Linear(300,4)
-        self.rnn = RNN(4,4)
-        self.L3 = Linear(4, 4)
+        self.L2 = Linear(300,20)
+        self.rnn = RNN(20,20)
+        self.L3 = Linear(20, 4)
         self.softmax = Softmax(4)
         self.target_map = {}
         self.target_id_to_tag = {}
