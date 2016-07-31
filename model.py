@@ -107,6 +107,7 @@ class Model(object):
         self.L3 = Linear(4, 4)
         self.softmax = Softmax(4)
         self.target_map = {}
+        self.target_id_to_tag = {}
 
     def forward(self, sentence):
         window_c = []

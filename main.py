@@ -25,6 +25,8 @@ def load_data(filename):
         last_sentence.append(token)
         last_target.append(tag)
     if len(last_target)!=0:
+        last_sentence.append("#1")
+        last_sentence.append("#2")
         sentences.append(last_sentence)
         targets.append(last_target)
     return sentences, targets
@@ -67,6 +69,15 @@ def train_forward(m, sentence, target):
     return correct/len(softmax_c)
 
 
+def predict_with_model(m, sentence):
+    window_c, window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c = m.forward(sentence)
+    target = []
+    for v in softmax_c:
+        ans_id = numpy.argmax(v)
+        target.append(m.target_id_to_tag[ans_id])
+    return target
+
+
 def init_lookup_table(m, sentences):
     for s in sentences:
         for token in s:
@@ -84,17 +95,37 @@ def init_targets_id(m, targets):
 def train_model():
     numpy.seterr(invalid="raise")
     m = Model()
-    sentences, targets = load_data("predict_test_train.utf8")
+    sentences, targets = load_data("ctb_seg_train.utf8")
     init_lookup_table(m,sentences)
     init_targets_id(m, targets)
     data_count = len(sentences)
-    for iter_time in range(1000):
+    iter_time = 0
+    not_stop = True
+    while (not_stop):
+        iter_time += 1
         correct_rate = 0
         for i in range(data_count):
             correct_rate += train_forward(m, sentences[i], targets[i])
-
         correct_rate /= data_count
         print("Iter %d correct rate=%f"%(iter_time, correct_rate))
+        if correct_rate>0.99 or iter_time>30:
+            not_stop = False
+    test_model(m)
+    return m
+
+
+def test_model(m):
+    sentences, targets = load_data("ctb_seg_test.utf8")
+    total_correct = 0.
+    total_tag = 0
+    for i in range(len(sentences)):
+        m_output = predict_with_model(m, sentences[i])
+        total_tag += len(m_output)
+        for j in range(len(m_output)):
+            if m_output[j] == targets[i][j]:
+               total_correct += 1
+    print("Test: %f"%(total_correct/total_tag))
+
 
 if __name__=="__main__":
-    train_model()
+    m = train_model()
