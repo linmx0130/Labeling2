@@ -38,21 +38,28 @@ def sgdUpdate(target, dvalue, learn_rate = 0.01, L2Reg = 0.0001):
 
 def adagradUpdate(target, history, dvalue, learn_rate = 0.01, L2Reg = 0.0001):
     dx = dvalue + target * L2Reg
-    history += dx **2
+    history +=  dx **2
+    target -= learn_rate * dx / (numpy.sqrt(history) + 1e-7)
+
+
+def rmspropUpdate(target, history, dvalue, learn_rate = 0.005, L2Reg = 0.0001, decay_rate = 0.9):
+    dx = dvalue + target * L2Reg
+    history *= decay_rate
+    history += (1-decay_rate) * dx **2
     target -= learn_rate * dx / (numpy.sqrt(history) + 1e-7)
 
 
 def train_forward(m, sentence, target):
     window_c, window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c = m.forward(sentence)
     dEmbed_c, dlin1W, dlin1B, dlin2W, dlin2b, drnnW, drnnU, drnnB, dlin3W, dlin3b= m.backward(window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c, target)
-    adagradUpdate(m.L1.W, m.L1.Wh, dlin1W)
+    rmspropUpdate(m.L1.W, m.L1.Wh, dlin1W)
     sgdUpdate(m.L1.b, dlin1B)
-    adagradUpdate(m.L2.W, m.L2.Wh, dlin2W)
+    rmspropUpdate(m.L2.W, m.L2.Wh, dlin2W)
     sgdUpdate(m.L2.b, dlin2b)
-    adagradUpdate(m.L3.W, m.L3.Wh, dlin3W)
+    rmspropUpdate(m.L3.W, m.L3.Wh, dlin3W)
     sgdUpdate(m.L3.b, dlin3b)
-    adagradUpdate(m.rnn.W, m.rnn.Wh, drnnW)
-    adagradUpdate(m.rnn.U, m.rnn.Uh, drnnU)
+    rmspropUpdate(m.rnn.W, m.rnn.Wh, drnnW)
+    rmspropUpdate(m.rnn.U, m.rnn.Uh, drnnU)
     sgdUpdate(m.rnn.b, drnnB)
 
     assert len(dEmbed_c) == len(window_c)
@@ -96,8 +103,8 @@ def init_targets_id(m, targets):
 def train_model():
     numpy.seterr(invalid="raise")
     m = Model()
-    sentences, targets = load_data("ctb_seg_train.utf8")
-    testset_sentences, testset_targets = load_data("ctb_seg_test.utf8")
+    sentences, targets = load_data("predict_test_train.utf8")
+    testset_sentences, testset_targets = load_data("predict_test_train.utf8")
     init_lookup_table(m,sentences)
     init_lookup_table(m, testset_sentences)
     init_targets_id(m, targets)
