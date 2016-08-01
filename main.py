@@ -55,14 +55,14 @@ def train_forward(m, sentence, target):
         lin3_c, softmax_c = m.forward(sentence)
     dEmbed_c, dlin1W, dlin1B, drnnWf, drnnWi, drnnWo, drnnWc, drnnBf, drnnBi, drnnBo, drnnBc, dlin3W, dlin3b= \
         m.backward(window_vectors_c, lin1_c, non1_c, lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c, lin3_c, softmax_c, target)
-    rmspropUpdate(m.L1.W, m.L1.Wh, dlin1W)
+    adagradUpdate(m.L1.W, m.L1.Wh, dlin1W)
     sgdUpdate(m.L1.b, dlin1B)
-    rmspropUpdate(m.L3.W, m.L3.Wh, dlin3W)
+    adagradUpdate(m.L3.W, m.L3.Wh, dlin3W)
     sgdUpdate(m.L3.b, dlin3b)
-    rmspropUpdate(m.lstm.Wf, m.lstm.Wfh, drnnWf)
-    rmspropUpdate(m.lstm.Wi, m.lstm.Wih, drnnWi)
-    rmspropUpdate(m.lstm.Wo, m.lstm.Woh, drnnWo)
-    rmspropUpdate(m.lstm.Wc, m.lstm.Wch, drnnWc)
+    adagradUpdate(m.lstm.Wf, m.lstm.Wfh, drnnWf)
+    adagradUpdate(m.lstm.Wi, m.lstm.Wih, drnnWi)
+    adagradUpdate(m.lstm.Wo, m.lstm.Woh, drnnWo)
+    adagradUpdate(m.lstm.Wc, m.lstm.Wch, drnnWc)
     sgdUpdate(m.lstm.Bf, drnnBf)
     sgdUpdate(m.lstm.Bi, drnnBi)
     sgdUpdate(m.lstm.Bo, drnnBo)
@@ -123,11 +123,12 @@ def train_model():
     while (not_stop):
         iter_time += 1
         correct_rate = 0
-        for i in range(data_count):
+        for counter in range(data_count):
+            i = numpy.random.randint(0, data_count)
             correct_rate += train_forward(m, sentences[i], targets[i])
         correct_rate /= data_count
         print("Iter %d correct rate=%f"%(iter_time, correct_rate))
-        if correct_rate>0.99 or iter_time>30:
+        if correct_rate>0.99 and iter_time>30:
             not_stop = False
         current_value = test_model(m, testset_sentences, testset_targets)
         if current_value > highest_rate:
