@@ -70,7 +70,7 @@ def train_forward(m, sentence, target):
 
     assert len(dEmbed_c) == len(window_c)
     for i in range(len(window_c)):
-        dEmbed = numpy.reshape(dEmbed_c[i], newshape=(5, 50))
+        dEmbed = numpy.reshape(dEmbed_c[i], newshape=(5, m.lookup.embed_size))
         window = window_c[i]
         for j in range(len(window)):
             sgdUpdate(m.lookup.table[window[j]], dEmbed[j])
