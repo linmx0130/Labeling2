@@ -29,6 +29,68 @@ class RNN(object):
         return di, dh, dW, dU, dv
 
 
+def sigmoid(x):
+    return numpy.ones_like(x)/(numpy.ones_like(x) + numpy.exp(-x))
+
+
+class LSTM(object):
+    def __init__(self, in_size, out_size):
+        self.in_size = in_size
+        self.out_size = out_size
+        self.Wf = numpy.random.uniform(-numpy.sqrt(6./(in_size + out_size * 2)),
+                                       numpy.sqrt(6./(in_size + out_size * 2)), size= (out_size, in_size + out_size))
+        self.Wi = numpy.random.uniform(-numpy.sqrt(6. / (in_size + out_size * 2)),
+                                       numpy.sqrt(6. / (in_size + out_size * 2)), size=(out_size, in_size + out_size))
+        self.Wo = numpy.random.uniform(-numpy.sqrt(6. / (in_size + out_size * 2)),
+                                       numpy.sqrt(6. / (in_size + out_size * 2)), size=(out_size, in_size + out_size))
+        self.Wc = numpy.random.uniform(-numpy.sqrt(6. / (in_size + out_size * 2)),
+                                   numpy.sqrt(6. / (in_size + out_size * 2)), size=(out_size, in_size + out_size))
+        self.Bf = numpy.zeros(out_size)
+        self.Bi = numpy.zeros(out_size)
+        self.Bo = numpy.zeros(out_size)
+        self.Bc = numpy.zeros(out_size)
+        self.Wfh = numpy.zeros_like(self.Wf)
+        self.Wih = numpy.zeros_like(self.Wi)
+        self.Woh = numpy.zeros_like(self.Wo)
+        self.Wch = numpy.zeros_like(self.Wc)
+
+    def step(self, input, last_hidden, last_cell):
+        real_input = numpy.concatenate((input, last_hidden))
+        fg = sigmoid(numpy.dot(self.Wf, real_input) + self.Bf)
+        ig = sigmoid(numpy.dot(self.Wi, real_input) + self.Bi)
+        og = sigmoid(numpy.dot(self.Wo, real_input) + self.Bo)
+        nc = numpy.tanh(numpy.dot(self.Wc, real_input) + self.Bc)
+        cell = fg * last_cell + ig * nc
+        tcell = numpy.tanh(cell)
+        hidden = og * tcell
+        return hidden, cell, fg, ig, og, nc, tcell
+
+    def backward(self, input, last_hidden, last_cell, fg, ig, og, nc, tcell, errors_from_next_layer, dhidden_from_next, dcell_from_next):
+        errors = errors_from_next_layer + dhidden_from_next
+        d_og = errors * tcell
+        d_tcell = errors * og
+        d_cell = d_tcell * (numpy.ones_like(tcell) - tcell ** 2) + dcell_from_next
+
+        d_fg = d_cell * last_cell
+        d_last_cell = d_cell * fg
+        d_ig = d_cell * nc
+        d_nc = d_cell * ig
+
+        d_fg = d_fg * fg *(numpy.ones_like(fg) - fg)
+        d_ig = d_ig * ig *(numpy.ones_like(ig) - ig)
+        d_og = d_og * og * (numpy.ones_like(og) - og)
+        d_nc = d_nc * nc * (numpy.ones_like(nc) - nc)
+
+        d_real_input = numpy.dot(d_fg, self.Wf) + numpy.dot(d_ig, self.Wi) + numpy.dot(d_og, self.Wo) + numpy.dot(d_nc, self.Wc)
+        d_input = d_real_input[:self.in_size]
+        d_hidden = d_real_input[self.in_size:]
+        real_input = numpy.concatenate((input, last_hidden))
+        dWf = numpy.outer(d_fg, real_input)
+        dWi = numpy.outer(d_ig, real_input)
+        dWo = numpy.outer(d_og, real_input)
+        dWc = numpy.outer(d_nc, real_input)
+        return d_input, d_hidden, d_last_cell, dWf, dWi, dWo, dWc, d_fg, d_ig, d_og, d_nc
+
 class Linear(object):
     def __init__(self, in_size, out_size):
         self.in_size = in_size
@@ -102,9 +164,8 @@ class Model(object):
         self.lookup = LookupTable(50)
         self.L1 = Linear(250, 300)
         self.N1 = Nonlinear(300)
-        self.L2 = Linear(300,20)
-        self.rnn = RNN(20,20)
-        self.L3 = Linear(20, 4)
+        self.lstm = LSTM(300,50)
+        self.L3 = Linear(50, 4)
         self.softmax = Softmax(4)
         self.target_map = {}
         self.target_id_to_tag = {}
@@ -123,57 +184,82 @@ class Model(object):
             non1 = self.N1.step(lin1)
             lin1_c.append(lin1)
             non1_c.append(non1)
-        lin2_c = [self.L2.step(v) for v in non1_c]
-        rnn_c = []
-        for i in range(len(lin2_c)):
+        lstm_h_c = []
+        lstm_c_c = []
+        lstm_fg_c = []
+        lstm_ig_c = []
+        lstm_og_c = []
+        lstm_nc_c = []
+        lstm_tcell_c =[]
+        for i in range(len(non1_c)):
             if i == 0:
-                last_hidden = numpy.zeros(self.rnn.out_size)
+                last_hidden = numpy.zeros(self.lstm.out_size)
+                last_cell = numpy.zeros(self.lstm.out_size)
             else:
-                last_hidden = rnn_c[i-1]
-            rnn_out = self.rnn.step(lin2_c[i], last_hidden)
-            rnn_c.append(rnn_out)
+                last_hidden = lstm_h_c[i-1]
+                last_cell = lstm_c_c[i-1]
+            l_hidden, l_cell, l_fg, l_ig, l_og, l_nc, l_tcell = self.lstm.step(non1_c[i], last_hidden, last_cell)
+            lstm_h_c.append(l_hidden)
+            lstm_c_c.append(l_cell)
+            lstm_fg_c.append(l_fg)
+            lstm_ig_c.append(l_ig)
+            lstm_og_c.append(l_og)
+            lstm_nc_c.append(l_nc)
+            lstm_tcell_c.append(l_tcell)
 
-        lin3_c = [self.L3.step(v) for v in rnn_c]
+        lin3_c = [self.L3.step(v) for v in lstm_h_c]
         softmax_c = [self.softmax.step(v) for v in lin3_c]
-        return (window_c, window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c)
+        return (window_c, window_vectors_c, lin1_c, non1_c,
+                lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,
+                lin3_c, softmax_c)
 
-    def backward(self, window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c, targets):
+    def backward(self, window_vectors_c, lin1_c, non1_c,
+                 lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,
+                 lin3_c, softmax_c, targets):
         assert len(softmax_c) == len(targets)
         derrors = [self.softmax.get_gradients(softmax_c[i], self.target_map[targets[i]]) for i in range(len(targets))]
         dlin3W_s = numpy.zeros_like(self.L3.W)
         dlin3b_s = numpy.zeros_like(self.L3.b)
         drnn_c = []
         for i in range(len(derrors)):
-            drnn, dlin3W, dlin3b = self.L3.back_step(lin2_c[i], derrors[i])
+            drnn, dlin3W, dlin3b = self.L3.back_step(lstm_h_c[i], derrors[i])
             drnn_c.append(drnn)
             dlin3W_s += dlin3W
             dlin3b_s += dlin3b
 
-        drnnW_s = numpy.zeros_like(self.rnn.W)
-        drnnU_s = numpy.zeros_like(self.rnn.U)
-        drnnB_s = numpy.zeros_like(self.rnn.b)
-        dhidden_from_next = numpy.zeros(self.rnn.out_size)
-        dlin2_c = []
+        drnnWf_s = numpy.zeros_like(self.lstm.Wf)
+        drnnWi_s = numpy.zeros_like(self.lstm.Wi)
+        drnnWo_s = numpy.zeros_like(self.lstm.Wo)
+        drnnWc_s = numpy.zeros_like(self.lstm.Wc)
+        drnnBf_s = numpy.zeros_like(self.lstm.Bf)
+        drnnBi_s = numpy.zeros_like(self.lstm.Bi)
+        drnnBo_s = numpy.zeros_like(self.lstm.Bi)
+        drnnBc_s = numpy.zeros_like(self.lstm.Bc)
+        dhidden_from_next = numpy.zeros(self.lstm.out_size)
+        dcell_from_next = numpy.zeros(self.lstm.out_size)
+        dnon1_c = []
         for i in range(len(drnn_c) - 1, -1, -1):
             if i == 0:
-                last_hidden = numpy.zeros(self.rnn.out_size)
+                last_hidden = numpy.zeros(self.lstm.out_size)
+                last_cell = numpy.zeros(self.lstm.out_size)
             else:
-                last_hidden = rnn_c[i - 1]
-            di, dh, dW, dU, dB = self.rnn.back_step(lin2_c[i], last_hidden, rnn_c[i], dhidden_from_next, drnn_c[i])
-            dlin2_c.insert(0, di)
-            dhidden_from_next = dh
-            drnnW_s += dW
-            drnnU_s += dU
-            drnnB_s += dB
-
-        dnon1_c = []
-        dlin2W_s = numpy.zeros_like(self.L2.W)
-        dlin2b_s = numpy.zeros_like(self.L2.b)
-        for i in range(len(derrors)):
-            dnon_1, dlin2W, dlin2b = self.L2.back_step(non1_c[i], dlin2_c[i])
-            dnon1_c.append(dnon_1)
-            dlin2W_s += dlin2W
-            dlin2b_s += dlin2b
+                last_hidden = lstm_h_c[i - 1]
+                last_cell = lstm_c_c[i - 1]
+            d_input, d_hidden, d_last_cell, dWf, dWi, dWo, dWc, dBf, dBi, dBo, dBc = \
+                self.lstm.backward(non1_c[i], last_hidden, last_cell,
+                                   lstm_fg_c[i], lstm_ig_c[i], lstm_og_c[i], lstm_nc_c[i], lstm_tcell_c[i],
+                                   drnn_c[i], dhidden_from_next, dcell_from_next)
+            dnon1_c.insert(0, d_input)
+            dhidden_from_next = d_hidden
+            dcell_from_next = d_last_cell
+            drnnWf_s += dWf
+            drnnWi_s += dWi
+            drnnWo_s += dWo
+            drnnWc_s += dWc
+            drnnBf_s += dBf
+            drnnBi_s += dBi
+            drnnBo_s += dBo
+            drnnBc_s += dBc
 
         dlin1_c = []
         for i in range(len(dnon1_c)):
@@ -188,4 +274,4 @@ class Model(object):
             dlin1W_s += dW
             dlin1B_s += dB
 
-        return dEmbed_c, dlin1W_s, dlin1B_s, dlin2W_s, dlin2b_s, drnnW_s, drnnU_s, drnnB_s, dlin3W_s, dlin3b_s
+        return dEmbed_c, dlin1W_s, dlin1B_s, drnnWf_s, drnnWi_s, drnnWo_s, drnnWc_s, drnnBf_s, drnnBi_s, drnnBo_s, drnnBc_s, dlin3W_s, dlin3b_s
