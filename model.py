@@ -144,7 +144,7 @@ class Model(object):
         dlin3b_s = numpy.zeros_like(self.L3.b)
         drnn_c = []
         for i in range(len(derrors)):
-            drnn, dlin3W, dlin3b = self.L3.back_step(lin2_c[i], derrors[i])
+            drnn, dlin3W, dlin3b = self.L3.back_step(rnn_c[i], derrors[i])
             drnn_c.append(drnn)
             dlin3W_s += dlin3W
             dlin3b_s += dlin3b
