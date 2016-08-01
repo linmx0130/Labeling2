@@ -52,14 +52,14 @@ def rmspropUpdate(target, history, dvalue, learn_rate = 0.005, L2Reg = 0.0001, d
 def train_forward(m, sentence, target):
     window_c, window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c = m.forward(sentence)
     dEmbed_c, dlin1W, dlin1B, dlin2W, dlin2b, drnnW, drnnU, drnnB, dlin3W, dlin3b= m.backward(window_vectors_c, lin1_c, non1_c, lin2_c, rnn_c, lin3_c, softmax_c, target)
-    rmspropUpdate(m.L1.W, m.L1.Wh, dlin1W)
+    adagradUpdate(m.L1.W, m.L1.Wh, dlin1W)
     sgdUpdate(m.L1.b, dlin1B)
-    rmspropUpdate(m.L2.W, m.L2.Wh, dlin2W)
+    adagradUpdate(m.L2.W, m.L2.Wh, dlin2W)
     sgdUpdate(m.L2.b, dlin2b)
-    rmspropUpdate(m.L3.W, m.L3.Wh, dlin3W)
+    adagradUpdate(m.L3.W, m.L3.Wh, dlin3W)
     sgdUpdate(m.L3.b, dlin3b)
-    rmspropUpdate(m.rnn.W, m.rnn.Wh, drnnW)
-    rmspropUpdate(m.rnn.U, m.rnn.Uh, drnnU)
+    adagradUpdate(m.rnn.W, m.rnn.Wh, drnnW)
+    adagradUpdate(m.rnn.U, m.rnn.Uh, drnnU)
     sgdUpdate(m.rnn.b, drnnB)
 
     assert len(dEmbed_c) == len(window_c)
@@ -115,7 +115,8 @@ def train_model():
     while (not_stop):
         iter_time += 1
         correct_rate = 0
-        for i in range(data_count):
+        for counter in range(data_count):
+            i = numpy.random.randint(0,data_count):
             correct_rate += train_forward(m, sentences[i], targets[i])
         correct_rate /= data_count
         print("Iter %d correct rate=%f"%(iter_time, correct_rate))
