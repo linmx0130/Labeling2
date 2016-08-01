@@ -42,20 +42,27 @@ def adagradUpdate(target, history, dvalue, learn_rate = 0.02, L2Reg = 0.0001):
     target -= learn_rate * dx / (numpy.sqrt(history) + 1e-7)
 
 
+def rmspropUpdate(target, history, dvalue, learn_rate = 0.005, L2Reg = 0.0001, decay_rate = 0.9):
+    dx = dvalue + target * L2Reg
+    history *= decay_rate
+    history += (1-decay_rate) * dx **2
+    target -= learn_rate * dx / (numpy.sqrt(history) + 1e-7)
+
+
 def train_forward(m, sentence, target):
     window_c, window_vectors_c, lin1_c, non1_c,\
         lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,\
         lin3_c, softmax_c = m.forward(sentence)
     dEmbed_c, dlin1W, dlin1B, drnnWf, drnnWi, drnnWo, drnnWc, drnnBf, drnnBi, drnnBo, drnnBc, dlin3W, dlin3b= \
         m.backward(window_vectors_c, lin1_c, non1_c, lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c, lin3_c, softmax_c, target)
-    adagradUpdate(m.L1.W, m.L1.Wh, dlin1W)
+    rmspropUpdate(m.L1.W, m.L1.Wh, dlin1W)
     sgdUpdate(m.L1.b, dlin1B)
-    adagradUpdate(m.L3.W, m.L3.Wh, dlin3W)
+    rmspropUpdate(m.L3.W, m.L3.Wh, dlin3W)
     sgdUpdate(m.L3.b, dlin3b)
-    adagradUpdate(m.lstm.Wf, m.lstm.Wfh, drnnWf)
-    adagradUpdate(m.lstm.Wi, m.lstm.Wih, drnnWi)
-    adagradUpdate(m.lstm.Wo, m.lstm.Woh, drnnWo)
-    adagradUpdate(m.lstm.Wc, m.lstm.Wch, drnnWc)
+    rmspropUpdate(m.lstm.Wf, m.lstm.Wfh, drnnWf)
+    rmspropUpdate(m.lstm.Wi, m.lstm.Wih, drnnWi)
+    rmspropUpdate(m.lstm.Wo, m.lstm.Woh, drnnWo)
+    rmspropUpdate(m.lstm.Wc, m.lstm.Wch, drnnWc)
     sgdUpdate(m.lstm.Bf, drnnBf)
     sgdUpdate(m.lstm.Bi, drnnBi)
     sgdUpdate(m.lstm.Bo, drnnBo)
@@ -104,8 +111,8 @@ def init_targets_id(m, targets):
 def train_model():
     numpy.seterr(invalid="raise")
     m = Model()
-    sentences, targets = load_data("predict_test_train.utf8")
-    testset_sentences, testset_targets = load_data("predict_test_train.utf8")
+    sentences, targets = load_data("ctb_seg_train.utf8")
+    testset_sentences, testset_targets = load_data("ctb_seg_test.utf8")
     init_lookup_table(m,sentences)
     init_lookup_table(m, testset_sentences)
     init_targets_id(m, targets)
