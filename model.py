@@ -45,7 +45,7 @@ class LSTM(object):
                                        numpy.sqrt(6. / (in_size + out_size * 2)), size=(out_size, in_size + out_size))
         self.Wc = numpy.random.uniform(-numpy.sqrt(6. / (in_size + out_size * 2)),
                                    numpy.sqrt(6. / (in_size + out_size * 2)), size=(out_size, in_size + out_size))
-        self.Bf = numpy.zeros(out_size)
+        self.Bf = numpy.zeros(out_size) - 1
         self.Bi = numpy.zeros(out_size)
         self.Bo = numpy.zeros(out_size)
         self.Bc = numpy.zeros(out_size)
@@ -164,7 +164,9 @@ class Model(object):
         self.lookup = LookupTable(50)
         self.L1 = Linear(250, 300)
         self.N1 = Nonlinear(300)
+        self.L2 = Linear(300,50)
         self.lstm = LSTM(300,50)
+        self.highway_gate = numpy.ones(50) / 2
         self.L3 = Linear(50, 4)
         self.softmax = Softmax(4)
         self.target_map = {}
@@ -206,27 +208,43 @@ class Model(object):
             lstm_og_c.append(l_og)
             lstm_nc_c.append(l_nc)
             lstm_tcell_c.append(l_tcell)
-
-        lin3_c = [self.L3.step(v) for v in lstm_h_c]
+        lin2_c = [self.L2.step(v) for v in non1_c]
+        lin3_c = []
+        for i in range(len(lstm_h_c)):
+            v = (1 - self.highway_gate) * lstm_h_c[i] + self.highway_gate * lin2_c[i]
+            lin3_c.append(self.L3.step(v))
         softmax_c = [self.softmax.step(v) for v in lin3_c]
-        return (window_c, window_vectors_c, lin1_c, non1_c,
+        return (window_c, window_vectors_c, lin1_c, non1_c, lin2_c,
                 lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,
                 lin3_c, softmax_c)
 
-    def backward(self, window_vectors_c, lin1_c, non1_c,
+    def backward(self, window_vectors_c, lin1_c, non1_c, lin2_c,
                  lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,
                  lin3_c, softmax_c, targets):
         assert len(softmax_c) == len(targets)
         derrors = [self.softmax.get_gradients(softmax_c[i], self.target_map[targets[i]]) for i in range(len(targets))]
         dlin3W_s = numpy.zeros_like(self.L3.W)
         dlin3b_s = numpy.zeros_like(self.L3.b)
-        drnn_c = []
+        dhighway_c = []
         for i in range(len(derrors)):
-            drnn, dlin3W, dlin3b = self.L3.back_step(lstm_h_c[i], derrors[i])
-            drnn_c.append(drnn)
+            dhighway, dlin3W, dlin3b = self.L3.back_step(lstm_h_c[i], derrors[i])
+            dhighway_c.append(dhighway)
             dlin3W_s += dlin3W
             dlin3b_s += dlin3b
 
+        dhighway_gate_s = numpy.zeros_like(self.highway_gate)
+        for i in range(len(dhighway_c)):
+            dhighway_gate_s += dhighway_c[i] * (lin2_c[i] - lstm_h_c[i])
+        drnn_c = [(1-self.highway_gate) * dhighway for dhighway in dhighway_c]
+        dlin2_c = [self.highway_gate * dhighway for dhighway in dhighway_c]
+        dnon1_c = []
+        dlin2W_s = numpy.zeros_like(self.L2.W)
+        dlin2b_s = numpy.zeros_like(self.L2.b)
+        for i in range(len(dlin2_c)):
+            dnon1, dlin2W, dlin2b = self.L2.back_step(non1_c[i], dlin2_c[i])
+            dnon1_c.append(dnon1)
+            dlin2W_s += dlin2W
+            dlin2b_s += dlin2b
         drnnWf_s = numpy.zeros_like(self.lstm.Wf)
         drnnWi_s = numpy.zeros_like(self.lstm.Wi)
         drnnWo_s = numpy.zeros_like(self.lstm.Wo)
@@ -237,7 +255,6 @@ class Model(object):
         drnnBc_s = numpy.zeros_like(self.lstm.Bc)
         dhidden_from_next = numpy.zeros(self.lstm.out_size)
         dcell_from_next = numpy.zeros(self.lstm.out_size)
-        dnon1_c = []
         for i in range(len(drnn_c) - 1, -1, -1):
             if i == 0:
                 last_hidden = numpy.zeros(self.lstm.out_size)
@@ -249,7 +266,7 @@ class Model(object):
                 self.lstm.backward(non1_c[i], last_hidden, last_cell,
                                    lstm_fg_c[i], lstm_ig_c[i], lstm_og_c[i], lstm_nc_c[i], lstm_tcell_c[i],
                                    drnn_c[i], dhidden_from_next, dcell_from_next)
-            dnon1_c.insert(0, d_input)
+            dnon1_c[i] += d_input
             dhidden_from_next = d_hidden
             dcell_from_next = d_last_cell
             drnnWf_s += dWf
@@ -274,4 +291,4 @@ class Model(object):
             dlin1W_s += dW
             dlin1B_s += dB
 
-        return dEmbed_c, dlin1W_s, dlin1B_s, drnnWf_s, drnnWi_s, drnnWo_s, drnnWc_s, drnnBf_s, drnnBi_s, drnnBo_s, drnnBc_s, dlin3W_s, dlin3b_s
+        return dEmbed_c, dlin1W_s, dlin1B_s, dlin2W_s, dlin2b_s, drnnWf_s, drnnWi_s, drnnWo_s, drnnWc_s, drnnBf_s, drnnBi_s, drnnBo_s, drnnBc_s, dhighway_gate_s, dlin3W_s, dlin3b_s

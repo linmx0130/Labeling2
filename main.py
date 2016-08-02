@@ -50,15 +50,17 @@ def rmspropUpdate(target, history, dvalue, learn_rate = 0.005, L2Reg = 0.0001, d
 
 
 def train_forward(m, sentence, target):
-    window_c, window_vectors_c, lin1_c, non1_c,\
+    window_c, window_vectors_c, lin1_c, non1_c, lin2_c,\
         lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,\
         lin3_c, softmax_c = m.forward(sentence)
-    dEmbed_c, dlin1W, dlin1B, drnnWf, drnnWi, drnnWo, drnnWc, drnnBf, drnnBi, drnnBo, drnnBc, dlin3W, dlin3b= \
-        m.backward(window_vectors_c, lin1_c, non1_c, lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c, lin3_c, softmax_c, target)
+    dEmbed_c, dlin1W, dlin1B, dlin2W, dlin2b, drnnWf, drnnWi, drnnWo, drnnWc, drnnBf, drnnBi, drnnBo, drnnBc, dhighway_gate, dlin3W, dlin3b= \
+        m.backward(window_vectors_c, lin1_c, non1_c, lin2_c, lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c, lin3_c, softmax_c, target)
     adagradUpdate(m.L1.W, m.L1.Wh, dlin1W)
     sgdUpdate(m.L1.b, dlin1B)
     adagradUpdate(m.L3.W, m.L3.Wh, dlin3W)
     sgdUpdate(m.L3.b, dlin3b)
+    adagradUpdate(m.L2.W, m.L2.Wh, dlin2W)
+    sgdUpdate(m.L2.b, dlin2b)
     adagradUpdate(m.lstm.Wf, m.lstm.Wfh, drnnWf)
     adagradUpdate(m.lstm.Wi, m.lstm.Wih, drnnWi)
     adagradUpdate(m.lstm.Wo, m.lstm.Woh, drnnWo)
@@ -67,6 +69,7 @@ def train_forward(m, sentence, target):
     sgdUpdate(m.lstm.Bi, drnnBi)
     sgdUpdate(m.lstm.Bo, drnnBo)
     sgdUpdate(m.lstm.Bc, drnnBc)
+    sgdUpdate(m.highway_gate, dhighway_gate)
 
     assert len(dEmbed_c) == len(window_c)
     for i in range(len(window_c)):
@@ -83,7 +86,7 @@ def train_forward(m, sentence, target):
 
 
 def predict_with_model(m, sentence):
-    window_c, window_vectors_c, lin1_c, non1_c, \
+    window_c, window_vectors_c, lin1_c, non1_c, dlin2_c, \
         lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,\
         lin3_c, softmax_c = m.forward(sentence)
     target = []
@@ -111,8 +114,8 @@ def init_targets_id(m, targets):
 def train_model():
     numpy.seterr(invalid="raise")
     m = Model()
-    sentences, targets = load_data("ctb_seg_train.utf8")
-    testset_sentences, testset_targets = load_data("ctb_seg_test.utf8")
+    sentences, targets = load_data("predict_test_train.utf8")
+    testset_sentences, testset_targets = load_data("predict_test_train.utf8")
     init_lookup_table(m,sentences)
     init_lookup_table(m, testset_sentences)
     init_targets_id(m, targets)
@@ -128,6 +131,7 @@ def train_model():
             correct_rate += train_forward(m, sentences[i], targets[i])
         correct_rate /= data_count
         print("Iter %d correct rate=%f"%(iter_time, correct_rate))
+        print("Highway gate sum = %f"%(m.highway_gate.sum()))
         if correct_rate>0.99 and iter_time>30:
             not_stop = False
         current_value = test_model(m, testset_sentences, testset_targets)
