@@ -166,7 +166,7 @@ class Model(object):
         self.N1 = Nonlinear(300)
         self.L2 = Linear(300,50)
         self.lstm = LSTM(300,50)
-        self.highway_gate = numpy.ones(50) / 2
+        self.highway_gate = numpy.zeros(50)
         self.L3 = Linear(50, 4)
         self.softmax = Softmax(4)
         self.target_map = {}
@@ -210,8 +210,9 @@ class Model(object):
             lstm_tcell_c.append(l_tcell)
         lin2_c = [self.L2.step(v) for v in non1_c]
         lin3_c = []
+        highway_gate_value = sigmoid(self.highway_gate)
         for i in range(len(lstm_h_c)):
-            v = (1 - self.highway_gate) * lstm_h_c[i] + self.highway_gate * lin2_c[i]
+            v = (1 - highway_gate_value) * lstm_h_c[i] + highway_gate_value * lin2_c[i]
             lin3_c.append(self.L3.step(v))
         softmax_c = [self.softmax.step(v) for v in lin3_c]
         return (window_c, window_vectors_c, lin1_c, non1_c, lin2_c,
@@ -235,6 +236,8 @@ class Model(object):
         dhighway_gate_s = numpy.zeros_like(self.highway_gate)
         for i in range(len(dhighway_c)):
             dhighway_gate_s += dhighway_c[i] * (lin2_c[i] - lstm_h_c[i])
+        highway_gate_value = sigmoid(self.highway_gate)
+        dhighway_gate_s *= highway_gate_value * (numpy.ones_like(highway_gate_value) - highway_gate_value)
         drnn_c = [(1-self.highway_gate) * dhighway for dhighway in dhighway_c]
         dlin2_c = [self.highway_gate * dhighway for dhighway in dhighway_c]
         dnon1_c = []

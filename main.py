@@ -131,7 +131,7 @@ def train_model():
             correct_rate += train_forward(m, sentences[i], targets[i])
         correct_rate /= data_count
         print("Iter %d correct rate=%f"%(iter_time, correct_rate))
-        print("Highway gate sum = %f"%(m.highway_gate.sum()))
+        print("Highway gate sum = %f"%(sigmoid(m.highway_gate)).sum())
         if correct_rate>0.99 and iter_time>30:
             not_stop = False
         current_value = test_model(m, testset_sentences, testset_targets)
