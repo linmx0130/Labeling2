@@ -238,8 +238,8 @@ class Model(object):
             dhighway_gate_s += dhighway_c[i] * (lin2_c[i] - lstm_h_c[i])
         highway_gate_value = sigmoid(self.highway_gate)
         dhighway_gate_s *= highway_gate_value * (numpy.ones_like(highway_gate_value) - highway_gate_value)
-        drnn_c = [(1-self.highway_gate) * dhighway for dhighway in dhighway_c]
-        dlin2_c = [self.highway_gate * dhighway for dhighway in dhighway_c]
+        drnn_c = [(1-highway_gate_value) * dhighway for dhighway in dhighway_c]
+        dlin2_c = [highway_gate_value * dhighway for dhighway in dhighway_c]
         dnon1_c = []
         dlin2W_s = numpy.zeros_like(self.L2.W)
         dlin2b_s = numpy.zeros_like(self.L2.b)
