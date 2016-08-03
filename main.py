@@ -53,7 +53,7 @@ def train_forward(m, sentence, target):
     window_c, window_vectors_c, lin1_c, non1_c, lin2_c,\
         lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,\
         lin3_c, softmax_c = m.forward(sentence)
-    dEmbed_c, dlin1W, dlin1B, dlin2W, dlin2b, drnnWf, drnnWi, drnnWo, drnnWc, drnnBf, drnnBi, drnnBo, drnnBc, dhighway_gate, dlin3W, dlin3b= \
+    dEmbed_c, dlin1W, dlin1B, dlin2W, dlin2b, drnnWf, drnnWi, drnnWo, drnnWc, drnnBf, drnnBi, drnnBo, drnnBc, dlin3W, dlin3b= \
         m.backward(window_vectors_c, lin1_c, non1_c, lin2_c, lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c, lin3_c, softmax_c, target)
     adagradUpdate(m.L1.W, m.L1.Wh, dlin1W)
     sgdUpdate(m.L1.b, dlin1B)
@@ -69,7 +69,6 @@ def train_forward(m, sentence, target):
     sgdUpdate(m.lstm.Bi, drnnBi)
     sgdUpdate(m.lstm.Bo, drnnBo)
     sgdUpdate(m.lstm.Bc, drnnBc)
-    sgdUpdate(m.highway_gate, dhighway_gate)
 
     assert len(dEmbed_c) == len(window_c)
     for i in range(len(window_c)):
@@ -131,7 +130,6 @@ def train_model():
             correct_rate += train_forward(m, sentences[i], targets[i])
         correct_rate /= data_count
         print("Iter %d correct rate=%f"%(iter_time, correct_rate))
-        print("Highway gate sum = %f"%(sigmoid(m.highway_gate)).sum())
         if correct_rate>0.99 and iter_time>30:
             not_stop = False
         current_value = test_model(m, testset_sentences, testset_targets)
