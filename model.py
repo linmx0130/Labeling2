@@ -208,18 +208,20 @@ class Model(object):
             lstm_nc_c.append(l_nc)
             lstm_tcell_c.append(l_tcell)
         lin2_c = [self.L2.step(v) for v in non1_c]
+        after_highway = []
         lin3_c = []
         for i in range(len(lstm_h_c)):
-            v = lstm_h_c[i] + lin2_c[i]
+            v = numpy.tanh(lstm_h_c[i] + lin2_c[i])
+            after_highway.append(v)
             lin3_c.append(self.L3.step(v))
         softmax_c = [self.softmax.step(v) for v in lin3_c]
         return (window_c, window_vectors_c, lin1_c, non1_c, lin2_c,
                 lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,
-                lin3_c, softmax_c)
+                after_highway, lin3_c, softmax_c)
 
     def backward(self, window_vectors_c, lin1_c, non1_c, lin2_c,
                  lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,
-                 lin3_c, softmax_c, targets):
+                 after_highway, lin3_c, softmax_c, targets):
         assert len(softmax_c) == len(targets)
         derrors = [self.softmax.get_gradients(softmax_c[i], self.target_map[targets[i]]) for i in range(len(targets))]
         dlin3W_s = numpy.zeros_like(self.L3.W)
@@ -227,6 +229,7 @@ class Model(object):
         dhighway_c = []
         for i in range(len(derrors)):
             dhighway, dlin3W, dlin3b = self.L3.back_step(lstm_h_c[i], derrors[i])
+            dhighway *= 1 - after_highway[i] ** 2
             dhighway_c.append(dhighway)
             dlin3W_s += dlin3W
             dlin3b_s += dlin3b

@@ -52,9 +52,9 @@ def rmspropUpdate(target, history, dvalue, learn_rate = 0.005, L2Reg = 0.0001, d
 def train_forward(m, sentence, target):
     window_c, window_vectors_c, lin1_c, non1_c, lin2_c,\
         lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,\
-        lin3_c, softmax_c = m.forward(sentence)
+        after_highway, lin3_c, softmax_c = m.forward(sentence)
     dEmbed_c, dlin1W, dlin1B, dlin2W, dlin2b, drnnWf, drnnWi, drnnWo, drnnWc, drnnBf, drnnBi, drnnBo, drnnBc, dlin3W, dlin3b= \
-        m.backward(window_vectors_c, lin1_c, non1_c, lin2_c, lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c, lin3_c, softmax_c, target)
+        m.backward(window_vectors_c, lin1_c, non1_c, lin2_c, lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,after_highway, lin3_c, softmax_c, target)
     adagradUpdate(m.L1.W, m.L1.Wh, dlin1W)
     sgdUpdate(m.L1.b, dlin1B)
     adagradUpdate(m.L3.W, m.L3.Wh, dlin3W)
@@ -87,7 +87,7 @@ def train_forward(m, sentence, target):
 def predict_with_model(m, sentence):
     window_c, window_vectors_c, lin1_c, non1_c, dlin2_c, \
         lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,\
-        lin3_c, softmax_c = m.forward(sentence)
+        after_highway, lin3_c, softmax_c = m.forward(sentence)
     target = []
     for v in softmax_c:
         ans_id = numpy.argmax(v)
