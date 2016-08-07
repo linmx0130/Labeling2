@@ -53,6 +53,10 @@ class LSTM(object):
         self.Wih = numpy.zeros_like(self.Wi)
         self.Woh = numpy.zeros_like(self.Wo)
         self.Wch = numpy.zeros_like(self.Wc)
+        self.Bfh = numpy.zeros_like(self.Bf)
+        self.Bih = numpy.zeros_like(self.Bi)
+        self.Boh = numpy.zeros_like(self.Bo)
+        self.Bch = numpy.zeros_like(self.Bc)
 
     def step(self, input, last_hidden, last_cell):
         real_input = numpy.concatenate((input, last_hidden))
