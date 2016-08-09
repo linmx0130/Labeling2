@@ -33,7 +33,7 @@ def load_data(filename):
 
 
 def sgdUpdate(target, dvalue, learn_rate = 0.01, L2Reg = 0.0001):
-    target -= learn_rate*(dvalue + target*L2Reg)
+    target -= learn_rate*(dvalue + target *L2Reg)
 
 
 def adagradUpdate(target, history, dvalue, learn_rate = 0.02, L2Reg = 0.0001):
@@ -56,19 +56,19 @@ def train_forward(m, sentence, target):
     dEmbed_c, dlin1W, dlin1B, dlin2W, dlin2b, drnnWf, drnnWi, drnnWo, drnnWc, drnnBf, drnnBi, drnnBo, drnnBc, dlin3W, dlin3b= \
         m.backward(window_vectors_c, lin1_c, non1_c, lin2_c, lstm_h_c, lstm_c_c, lstm_fg_c, lstm_ig_c, lstm_og_c, lstm_nc_c, lstm_tcell_c,after_highway, lin3_c, softmax_c, target)
     adagradUpdate(m.L1.W, m.L1.Wh, dlin1W)
-    adagradUpdate(m.L1.b, m.L1.bh, dlin1B)
+    sgdUpdate(m.L1.b, dlin1B)
     adagradUpdate(m.L3.W, m.L3.Wh, dlin3W)
-    adagradUpdate(m.L3.b, m.L3.bh, dlin3b)
+    sgdUpdate(m.L3.b, dlin3b)
     adagradUpdate(m.L2.W, m.L2.Wh, dlin2W)
-    adagradUpdate(m.L2.b, m.L2.bh, dlin2b)
+    sgdUpdate(m.L2.b, dlin2b)
     adagradUpdate(m.lstm.Wf, m.lstm.Wfh, drnnWf)
     adagradUpdate(m.lstm.Wi, m.lstm.Wih, drnnWi)
     adagradUpdate(m.lstm.Wo, m.lstm.Woh, drnnWo)
     adagradUpdate(m.lstm.Wc, m.lstm.Wch, drnnWc)
-    adagradUpdate(m.lstm.Bf, m.lstm.Bfh, drnnBf)
-    adagradUpdate(m.lstm.Bi, m.lstm.Bih, drnnBi)
-    adagradUpdate(m.lstm.Bo, m.lstm.Boh, drnnBo)
-    adagradUpdate(m.lstm.Bc, m.lstm.Bch, drnnBc)
+    sgdUpdate(m.lstm.Bf, drnnBf)
+    sgdUpdate(m.lstm.Bi, drnnBi)
+    sgdUpdate(m.lstm.Bo, drnnBo)
+    sgdUpdate(m.lstm.Bc, drnnBc)
 
     assert len(dEmbed_c) == len(window_c)
     for i in range(len(window_c)):
